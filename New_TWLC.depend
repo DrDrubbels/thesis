@@ -1,0 +1,55 @@
+# depslib dependency file v1.0
+1544132743 source:c:\users\maximiliaan\documents\studie\2018-2019\learning_c\new_twlc\main.cpp
+	<iostream>
+	<fstream>
+	<Eigen/Dense>
+	<math.h>
+	<random>
+	<cstdlib>
+	<ctime>
+	<string>
+	<windows.h>
+	"calc.h"
+	"chain_operations.h"
+	"constants.h"
+	"energy.h"
+	"files.h"
+	"matrices.h"
+	"monte_carlo.h"
+	"print_chain.h"
+	"random.h"
+
+1543419281 c:\users\maximiliaan\documents\studie\2018-2019\learning_c\new_twlc\random.h
+	<Eigen/Dense>
+
+1544107635 c:\users\maximiliaan\documents\studie\2018-2019\learning_c\new_twlc\files.h
+	<fstream>
+	<sys/stat.h>
+	<windows.h>
+
+1544127736 c:\users\maximiliaan\documents\studie\2018-2019\learning_c\new_twlc\matrices.h
+	<Eigen/Dense>
+
+1543970851 c:\users\maximiliaan\documents\studie\2018-2019\learning_c\new_twlc\monte_carlo.h
+	"random.h"
+	"constants.h"
+	"chain_operations.h"
+
+1543360191 c:\users\maximiliaan\documents\studie\2018-2019\learning_c\new_twlc\constants.h
+
+1544133067 c:\users\maximiliaan\documents\studie\2018-2019\learning_c\new_twlc\chain_operations.h
+	<Eigen/Dense>
+	"matrices.h"
+
+1543420398 c:\users\maximiliaan\documents\studie\2018-2019\learning_c\new_twlc\print_chain.h
+	<iostream>
+
+1544042796 c:\users\maximiliaan\documents\studie\2018-2019\learning_c\new_twlc\energy.h
+	<Eigen/Dense>
+	"chain_operations.h"
+	"matrices.h"
+
+1544107580 c:\users\maximiliaan\documents\studie\2018-2019\learning_c\new_twlc\calc.h
+	<Eigen/Dense>
+	"matrices.h"
+
