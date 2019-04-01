@@ -2,131 +2,186 @@
 #define CHAIN_OPERATIONS_H
 
 #include <Eigen/Dense>
+#include <fstream>
 
+#include "benergy.h"
+#include "joint.h"
 #include "matrices.h"
 
+using namespace std;
 using namespace Eigen;
 
-struct joint
+void set_benergy_open(Joint chain[], int chain_length, double a, double beta, double force, Vector3d Theta_0, Matrix3d stiffness)
 {
-    Vector3d position;  // used for all
-    Matrix3d triad;     // used for all
-    Vector3d tangent;   // used for all except last one (but still calculate it because why not)
-    Matrix3d R;         // used for all except first one (rotation matrix of triad when compared to the previous triad) (set to unity in first one)
-    double E_stiffness; // used for all except first one (calculated based on R) (automatically becomes 0 in first one)
-};
+    chain[0].benergy = joint_extension_benergy(chain[0], a, beta, force);
 
-Vector3d tangent(Matrix3d triad, double a)
-{
-    Vector3d tangent = a * triad.col(2);
-    return tangent;
-}
-
-void set_triad(joint chain[], int index, Matrix3d triad, double a)
-{
-    Vector3d tang = tangent(triad, a);
-    chain[index].triad = triad;
-    chain[index].tangent = tang;
-}
-
-Matrix3d reset_triad(Matrix3d triad) // Needs expansion to do the cross-product thing
-{
-    double D = triad.determinant();
-    return pow(D,-1/3) * triad;
-}
-
-void reset_chain(joint chain[], int chain_length, double a)
-{
-    // Rescale triads & recalculate tangents:
-    for (int index = 0; index < chain_length; ++index)
+    for (int index = 1; index < chain_length - 1; ++index)
     {
-        Matrix3d triad = reset_triad(chain[index].triad);
-        set_triad(chain, index, triad, a); // Sets triads AND tangents
+        chain[index].benergy = joint_extension_benergy(chain[index], a, beta, force) + joint_elastic_benergy(chain[index], stiffness, a, Theta_0);
     }
 
-    // Recalculate rotation matrices:
-    chain[0].R = Matrix3d::Identity();
-    for (int index = 1; index < chain_length; ++index)
-    {
-        chain[index].R = chain[index].triad * chain[index - 1].triad.inverse();
-    }
-
-    chain[0].position << 0, 0, 0;
-
-    // Reconstruct positions based on tangents:
-    for (int index = 1; index < chain_length; ++index)
-    {
-        joint previous_joint = chain[index - 1];
-        Vector3d position_reset = previous_joint.position + previous_joint.tangent;
-        chain[index].position = position_reset;
-    }
+    chain[chain_length - 1].benergy = joint_elastic_benergy(chain[chain_length - 1], stiffness, a, Theta_0);
 }
 
-Matrix3d starting_triad(int index, double a, double theta_0)
-{
-    double theta = index * theta_0;
-    Vector3d Theta;
-    Theta << 0, 0, theta;
-    Matrix3d triad = rotation_matrix(Theta);
-    return triad;
-}
-
-void initialize_triads_chain_straight(joint chain[], int chain_length, double a, double theta_0)
+void set_benergy_closed(Joint chain[], int chain_length, double a, double beta, Vector3d Theta_0, Matrix3d stiffness)
 {
     for (int index = 0; index < chain_length; ++index)
     {
-        //chain[index].position << 0, 0, a*index;
-        chain[index].triad = starting_triad(index, a, theta_0);
-        //chain[index].tangent = tangent(chain[index].triad);
+        chain[index].benergy = joint_elastic_benergy(chain[index], stiffness, a, Theta_0);
     }
 }
 
-void initialize_chain(joint chain[], int chain_length, double a, double theta_0)
+void set_benergy(Joint chain[], int chain_length, double a, double beta, double force, Vector3d Theta_0, Matrix3d stiffness, bool closed)
 {
-    cout << "Initializing chain" << endl;
-    initialize_triads_chain_straight(chain, chain_length, a, theta_0);
-    reset_chain(chain, chain_length, a);
-}
-
-void apply_pivot(joint chain[], int chain_length, int pivot_point, Matrix3d rotation_matrix, double a, Matrix3d new_R, double new_E_stiffness)
-{
-    Vector3d anchor = chain[pivot_point].position;
-
-    for (int index = pivot_point + 1; index < chain_length; ++index)
+    if (closed)
     {
-        // joint this_joint = chain[index];
-        Vector3d unrotated_pos = chain[index].position;
-        Vector3d rotated_pos = rotate_point_by_matrix(unrotated_pos, anchor, rotation_matrix);
-        chain[index].position = rotated_pos;
-        chain[index].triad = rotation_matrix * chain[index].triad;
-        chain[index].tangent = tangent(chain[index].triad, a);
+        set_benergy_closed(chain, chain_length, a, beta, Theta_0, stiffness);
     }
-
-    chain[pivot_point].R = new_R;
-    chain[pivot_point].E_stiffness = new_E_stiffness;
+    else
+    {
+        set_benergy_open(chain, chain_length, a, beta, force, Theta_0, stiffness);
+    }
 }
 
-Matrix3d correl_matrix(joint chain[], int chain_length)
+double chain_benergy(Joint chain[], int chain_length)
+{
+    double benergy = 0;
+    for (int index = 0; index < chain_length; ++index)
+    {
+        benergy += chain[index].benergy;
+    }
+    return benergy;
+}
+
+void initialize_chain_straight(Joint chain[], int chain_length, double a, Vector3d Theta_0)
+{
+    Matrix3d R = rot_matrix_from_vector(Theta_0);
+    chain[0].triad = Matrix3d::Identity();
+    chain[0].Theta = Vector3d::Zero();
+    for (int index = 1; index < chain_length; ++index)
+    {
+        chain[index].triad = chain[index - 1].triad * R;
+        chain[index].Theta = Theta_0;
+    }
+}
+
+void chain_copy(Joint origin[], Joint target[], int chain_length)
+{
+    for (int index = 0; index < chain_length; ++index)
+    {
+        target[index].benergy = origin[index].benergy;
+        target[index].Theta = origin[index].Theta;
+        target[index].triad = origin[index].triad;
+    }
+}
+
+Matrix3d relative_R(Joint chain[], int chain_length, int index, Matrix3d rot_mat) //relative_R if chain[index].triad has been rotated by rot_mat
+{
+    if (index > 0)
+    {
+        return chain[index - 1].triad.transpose() * rot_mat * chain[index].triad;
+    }
+    else
+    {
+        return chain[chain_length - 1].triad.transpose() * rot_mat * chain[index].triad;
+    }
+}
+
+Vector3d calc_Theta_open(Joint chain[], int chain_length, int index, Vector3d Theta_0)
+{
+    if (index == 0)
+    {
+        return Theta_0;
+    }
+    else
+    {
+        Matrix3d rot_mat = relative_R(chain, chain_length, index, Matrix3d::Identity());
+        Vector3d Theta = rot_vec_from_matrix(rot_mat);
+        return Theta;
+    }
+}
+
+Vector3d calc_Theta_closed(Joint chain[], int chain_length, int index, Vector3d Theta_0)
+{
+    Matrix3d rot_mat = relative_R(chain, chain_length, index, Matrix3d::Identity());
+    Vector3d Theta = rot_vec_from_matrix(rot_mat);
+    return Theta;
+}
+
+void set_Thetas(Joint chain[], int chain_length, Vector3d Theta_0, bool closed)
+{
+    for (int index = 0; index < chain_length; ++index)
+    {
+        Vector3d Theta;
+        if (closed)
+        {
+            Theta = calc_Theta_closed(chain, chain_length, index, Theta_0);
+        }
+        else
+        {
+            Theta = calc_Theta_open(chain, chain_length, index, Theta_0);
+        }
+        chain[index].Theta = Theta;
+    }
+}
+
+void rotate_chain(Joint chain[], int chain_length, int low_index, int high_index, Matrix3d rot_mat)
+{
+    for (int index = low_index; index < high_index; ++index)
+    {
+        // chain[index].triad = chain[index].triad * rot_mat;
+        chain[index].triad = rot_mat * chain[index].triad;
+    }
+}
+
+void rotate_chain_closed(Joint chain[], int chain_length, int low_index, int high_index, bool in_between, Matrix3d rot_mat)
+{
+    if (in_between)
+    {
+        rotate_chain(chain, chain_length, low_index, high_index, rot_mat);
+    }
+    else
+    {
+        rotate_chain(chain, chain_length, high_index, chain_length, rot_mat);
+        rotate_chain(chain, chain_length, 0, low_index, rot_mat);
+    }
+}
+
+void dump_chain(Joint chain[], int chain_length, string filename)
+{
+    ofstream myfile;
+    myfile.open(filename);
+    for (int index = 0; index < chain_length; ++index)
+    {
+        myfile << chain[index];
+    }
+    myfile.close();
+}
+
+void load_chain(Joint chain[], int chain_length, string filename)
+{
+    ifstream myfile;
+    myfile.open(filename);
+    for (int index = 0; index < chain_length; ++index)
+    {
+        myfile >> chain[index];
+    }
+    myfile.close();
+}
+
+Matrix3d chain_correlation(Joint chain[], int chain_length, Vector3d Theta_0)
 {
     Matrix3d correl = Matrix3d::Zero();
 
     for (int index = 0; index < chain_length; ++index)
     {
-        Vector3d Theta = rotation_vector_from_matrix(chain[index].R);
-        Matrix3d correl_term = Theta * Theta.transpose();
-        if (index == 10)
-        {
-            // cout << endl << correl_term << endl << endl;
-        }
-        correl += correl_term;
+        Vector3d Theta_reduced = chain[index].Theta - Theta_0;
+        correl += Theta_reduced * Theta_reduced.transpose();
     }
 
-    correl = correl / chain_length;
+    correl /= chain_length;
 
     return correl;
 }
 
-
-
 #endif // CHAIN_OPERATIONS_H
-

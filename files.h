@@ -29,13 +29,13 @@ bool DoesFileExist (const string& name)
     return (stat (name.c_str(), &buffer) == 0);
 }
 
-string next_filename(int start_nr)
+string next_filename(int start_nr, string directory, string extension)
 {
     bool already_exists = true;
     int file_nr = start_nr;
     do
     {
-        string filename = to_string(file_nr) + ".dat";
+        string filename = directory + "\\" + to_string(file_nr) + extension;
         if (DoesFileExist(filename))
         {
             // cout << filename << " already exists :(" << endl;
@@ -49,10 +49,11 @@ string next_filename(int start_nr)
     }
     while (already_exists);
 
-    string filename = to_string(file_nr) + ".dat";
-    return filename;
+    string filename = to_string(file_nr) + extension;
+    return directory + "\\" + filename;
 }
 
 #endif // FILES_H
+
 
 
